@@ -47,6 +47,7 @@ export default function Index() {
                       Sign up
                     </Link>
                     <Link
+                      role="link"
                       to="/login"
                       className="flex items-center justify-center rounded-md bg-blue-500 px-4 py-3 font-medium text-white hover:bg-blue-600"
                     >

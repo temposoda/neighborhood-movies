@@ -6,3 +6,6 @@ public/build
 
 postgres-data
 neighborhood-movies/postgres-data
+/test-results/
+/playwright-report/
+/playwright/.cache/
