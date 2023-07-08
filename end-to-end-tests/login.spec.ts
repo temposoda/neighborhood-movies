@@ -5,13 +5,13 @@ test('screenshot', async ({ page }) => {
   await expect(page).toHaveScreenshot();
 })
 
-test('has title', async ({ page }) => {
+test('log in as test user', async ({ page }) => {
   await page.goto('/login');
-  await expect(page).toHaveTitle(/Remix Notes/);
-});
+  const submit = page.getByRole('button', { name: 'Log in' })
+  await page.getByTestId('email').fill(String(process.env.USERNAME))
+  await page.getByTestId('password').fill(String(process.env.PASSWORD))
+  await expect(page).toHaveScreenshot();
 
-test('get started link', async ({ page }) => {
-  await page.goto('/login');
-  const link = page.getByRole('link', { name: 'Log in' })
-  expect(link).toBeEnabled()
+  await submit.click()
+  await expect(page).toHaveURL(/.*notes/);
 });

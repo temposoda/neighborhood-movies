@@ -1,18 +1,20 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
-dotenv.config()
+dotenv.config({ path: './.env.test' })
 
 /**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
+ * In some environments we know the exposed port information, so we append that to the hostname,
+ * but in other environments the hostname is all we know because the name server hides the
+ * port info using DNS. in that case we drop the port from the URL
  */
-// require('dotenv').config();
+const BASE_URL = `${process.env.FRONTEND_PROTOCOL}${process.env.FRONTEND_HOST_NAME}${process.env.FRONTEND_PORT ? `:${process.env.FRONTEND_PORT}` : ''}`
 
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
+  updateSnapshots: 'all',
   testDir: './end-to-end-tests',
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -27,8 +29,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: `${process.env.FRONTEND_PROTOCOL}${process.env.FRONTEND_HOST_NAME}:${process.env.FRONTEND_PORT}`,
-
+    baseURL: BASE_URL,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
   },
@@ -38,43 +39,17 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    }
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run start',
-    url: `${process.env.FRONTEND_PROTOCOL}${process.env.FRONTEND_HOST_NAME}:${process.env.FRONTEND_PORT}`,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [{
+    command: 'npm run build && npm run start',
+    url: BASE_URL,
+    reuseExistingServer: true,
+  }, {
+    command: 'npm run docker',
+    url: BASE_URL,
+    reuseExistingServer: true,
+  }],
 });

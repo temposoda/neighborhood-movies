@@ -1,11 +1,12 @@
 import type { ActionArgs, LoaderArgs, V2_MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, Link, useActionData, useSearchParams } from "@remix-run/react";
-import { useEffect, useRef } from "react";
-
+import { Form as RemixForm, useActionData, useSearchParams, useNavigation } from "@remix-run/react";
 import { createUser, getUserByEmail } from "~/models/user.server";
 import { createUserSession, getUserId } from "~/session.server";
 import { safeRedirect, validateEmail } from "~/utils";
+import { Button, Form, Link } from "~/components";
+import { useState } from "react";
+
 
 export const loader = async ({ request }: LoaderArgs) => {
   const userId = await getUserId(request);
@@ -69,98 +70,96 @@ export default function Join() {
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? undefined;
   const actionData = useActionData<typeof action>();
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (actionData?.errors?.email) {
-      emailRef.current?.focus();
-    } else if (actionData?.errors?.password) {
-      passwordRef.current?.focus();
-    }
-  }, [actionData]);
-
+  const navigation = useNavigation()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const buttonDisabled = navigation.state === 'submitting' || !email || !password
   return (
-    <div className="flex min-h-full flex-col justify-center">
-      <div className="mx-auto w-full max-w-md px-8">
-        <Form method="post" className="space-y-6">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Email address
-            </label>
-            <div className="mt-1">
-              <input
-                ref={emailRef}
-                id="email"
-                required
-                autoFocus={true}
-                name="email"
-                type="email"
-                autoComplete="email"
-                aria-invalid={actionData?.errors?.email ? true : undefined}
-                aria-describedby="email-error"
-                className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
-              />
-              {actionData?.errors?.email ? (
-                <div className="pt-1 text-red-700" id="email-error">
-                  {actionData.errors.email}
-                </div>
-              ) : null}
-            </div>
-          </div>
+    <main className="flex min-h-full flex-col justify-center items-center container gap-4">
+      <h1>Sign up</h1>
+      <Form.Root asChild >
+        <RemixForm method="post" className="space-y-6">
+          <Form.Input
+            autoComplete="email"
+            autoFocus={true}
+            id="email"
+            kind={actionData?.errors.email ? 'error' : 'primary'}
+            label="Email Address"
+            messages={[
+              {
+                match: 'valueMissing', message: 'Please enter your email'
+              },
+              {
+                match: 'typeMismatch', message: 'Please provide a valid email'
+              },
+              {
+                match: () => Boolean(actionData?.errors.email),
+                message: String(actionData?.errors.email),
+                forceMatch: Boolean(actionData?.errors.email)
+              }
+            ]}
+            name="email"
+            onChange={(event: any) => setEmail(event.target.value)}
+            required
+            serverInvalid={Boolean(actionData?.errors.email)}
+            type="email"
+            value={email}
+          />
 
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Password
-            </label>
-            <div className="mt-1">
-              <input
-                id="password"
-                ref={passwordRef}
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                aria-invalid={actionData?.errors?.password ? true : undefined}
-                aria-describedby="password-error"
-                className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
-              />
-              {actionData?.errors?.password ? (
-                <div className="pt-1 text-red-700" id="password-error">
-                  {actionData.errors.password}
-                </div>
-              ) : null}
-            </div>
-          </div>
+          <Form.Input
+            autoComplete="new-password"
+            id="password"
+            kind={actionData?.errors.password ? 'error' : 'primary'}
+            label="Password"
+            messages={[
+              {
+                match: 'tooShort',
+                message: 'Your password should be at least 10 characters long'
+              },
+              {
+                match: 'patternMismatch',
+                message: 'Your password should contain at least one special character, number, and letter'
+              },
+              {
+                match: () => Boolean(actionData?.errors.password),
+                forceMatch: Boolean(actionData?.errors.password),
+                message: String(actionData?.errors.password)
+              }
+            ]}
+            minLength={10}
+            name="password"
+            onChange={(event: any) => setPassword(event.target.value)}
+            // pattern="(?=.*\d)(?=.*
+            //     [a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-\]\[])"
+            required
+            serverInvalid={Boolean(actionData?.errors.password)}
+            type="password"
+            value={password}
+          />
+
 
           <input type="hidden" name="redirectTo" value={redirectTo} />
-          <button
-            type="submit"
-            className="w-full rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 focus:bg-blue-400"
-          >
-            Create Account
-          </button>
-          <div className="flex items-center justify-center">
-            <div className="text-center text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link
-                className="text-blue-500 underline"
-                to={{
-                  pathname: "/login",
-                  search: searchParams.toString(),
-                }}
-              >
-                Log in
-              </Link>
-            </div>
+
+          <Form.Submit>
+            <Button
+              disabled={buttonDisabled}
+            >
+              Create Account
+            </Button>
+          </Form.Submit>
+          <div className="flex gap-4">
+            Already have an account?{" "}
+            <Link
+              to={{
+                pathname: "/login",
+                search: searchParams.toString(),
+              }}
+            >
+              Log in
+            </Link>
           </div>
-        </Form>
-      </div>
-    </div>
+        </RemixForm>
+      </Form.Root>
+    </main >
   );
 }
