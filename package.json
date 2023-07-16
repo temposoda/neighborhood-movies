@@ -11,6 +11,7 @@
     "dev:build": "cross-env NODE_ENV=development npm run build:server -- --watch",
     "dev:remix": "cross-env NODE_ENV=development remix watch",
     "dev:server": "cross-env NODE_ENV=development node --inspect --require ./node_modules/dotenv/config --require ./mocks ./build/server.js",
+    "deploy:rollback": "fly deploy -i `fly releases -j | jq \".[1].ImageRef\" -r`",
     "docker": "docker compose up -d",
     "format": "prettier --write .",
     "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",

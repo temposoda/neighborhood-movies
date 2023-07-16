@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: './.env.test' })
+/**
+ * Only load in ENV variables when we are not running in CI.
+ * The relevant variables are stored in Github Environments
+ * during the CI process.
+ */
+if (!process.env.CI) dotenv.config({ path: './.env' })
 
 /**
  * In some environments we know the exposed port information, so we append that to the hostname,
@@ -43,13 +48,15 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: [{
-    command: 'npm run build && npm run start',
-    url: BASE_URL,
-    reuseExistingServer: true,
-  }, {
-    command: 'npm run docker',
-    url: BASE_URL,
-    reuseExistingServer: true,
-  }],
+  ...(!process.env.CI ? {
+    webServer: [{
+      command: 'npm run build && npm run start',
+      url: BASE_URL,
+      reuseExistingServer: true,
+    }, {
+      command: 'npm run docker',
+      url: BASE_URL,
+      reuseExistingServer: true,
+    }]
+  } : {}),
 });

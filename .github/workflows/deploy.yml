@@ -1,135 +1,75 @@
-name: "\U0001F680 Deploy"
-'on':
+name: "🚀 Deploy"
+on:
   push:
     branches:
       - main
-      - dev
-  pull_request: null
+
 concurrency:
   group: '${{ github.workflow }}-${{ github.ref }}'
   cancel-in-progress: true
 permissions:
   actions: write
   contents: read
+
 jobs:
-  lint:
-    name: ⬣ ESLint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: npm
-          node-version: 20
-      - name: "\U0001F4E5 Install dependencies"
-        run: npm install
-      - name: "\U0001F52C Lint"
-        run: npm run lint
-  typecheck:
-    name: ʦ TypeScript
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: npm
-          node-version: 20
-      - name: "\U0001F4E5 Install deps"
-        run: npm install
-      - name: "\U0001F50E Type check"
-        run: npm run typecheck
-  vitest:
-    name: ⚡ Vitest
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: npm
-          node-version: 20
-      - name: "\U0001F4E5 Install deps"
-        run: npm install
-      - name: ⚡ Run vitest
-        run: npm test -- --coverage
-  playwright:
-    name: ⚫️ End-to-end tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+  test:
+    name: "Tests"
+    uses: temposoda/neighborhood-movies/.github/workflows/test.yml@main
 
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v3
-        with:
-          cache: npm
-          cache-dependency-path: ./package.json
-          node-version: 18
-
-      - name: "\U0001F4E5 Install deps"
-        run: npm install
-
-      - name: "\U0001F433 Docker compose"
-        run: docker-compose up -d && sleep 3
-
-      - name: "\U0001F6E0 Setup Database"
-        run: npx dotenv-cli -e ./.env.test npx prisma migrate reset -- --force
-
-      - name: ⚙️ Build
-        run: npm run build
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Run Playwright tests
-        run: npx playwright test
-
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
-  deploy:
-    name: "\U0001F680 Deploy"
+  deploy-staging:
+    name: "Deploy/Staging"
     runs-on: ubuntu-latest
     needs:
-      - lint
-      - typecheck
-      - vitest
-      - playwright
-    if: >-
-      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
-      github.event_name == 'push' }}
+      - test
+    environment:
+      name: staging
+      url: 'https://www.neighborhood-movies-staging.fly.dev'
     steps:
-      - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
-      - name: "\U0001F440 Read app name"
-        uses: SebRollen/toml-action@v1.0.2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          cache: npm
+          node-version: 20
+      - uses: SebRollen/toml-action@v1.0.2
         id: app_name
         with:
           file: fly.toml
           field: app
-      - name: "\U0001F680 Deploy Staging"
-        if: '${{ github.ref == ''refs/heads/dev'' }}'
-        uses: superfly/flyctl-actions@1.4
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.4
         with:
-          args: >-
-            deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }} --app
-            ${{ steps.app_name.outputs.value }}-staging --strategy immediate
+          version: 0.1.58
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+
+      - run: flyctl apps list
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - run: flyctl releases
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - run: flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }} --app ${{ steps.app_name.outputs.value }}-staging --strategy immediate
         env:
           FLY_API_TOKEN: '${{ secrets.FLY_API_TOKEN }}'
-      - name: "\U0001F680 Deploy Production"
-        if: '${{ github.ref == ''refs/heads/main'' }}'
-        uses: superfly/flyctl-actions@1.4
+
+      - run: npx playwright test
+        id: integration-tests
+        env:
+          FRONTEND_HOST_NAME: ${{ vars.FRONTEND_HOST_NAME }}
+          FRONTEND_PROTOCOL: ${{ vars.FRONTEND_PROTOCOL }}
+          TEST_USERNAME: ${{ vars.TEST_USERNAME }}
+          TEST_USER_PASSWORD: ${{ vars.TEST_USER_PASSWORD }}
+
+      - uses: actions/upload-artifact@v3
+        if: failure()
         with:
-          args: >-
-            deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }} --app
-            ${{ steps.app_name.outputs.value }} --strategy immediate
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      # https://community.fly.io/t/how-to-ideas-rollbacks/12517
+      - run: flyctl deploy --strategy immediate -i `flyctl releases -j | jq ".[1].ImageRef" -r`
+        if: steps.integration-tests.outcome != 'success'
         env:
           FLY_API_TOKEN: '${{ secrets.FLY_API_TOKEN }}'
